@@ -1,8 +1,10 @@
 from pygooglenews import GoogleNews
 import re, nltk
 from nltk import ConditionalFreqDist
+from nltk import ngrams
 from nltk.tokenize import RegexpTokenizer
 from nltk.util import pad_sequence
+from nltk.lm.preprocessing import pad_both_ends
 from nltk.probability import ConditionalProbDist, ELEProbDist
 nltk.download('punkt')
 
@@ -20,20 +22,21 @@ class Autopoiem():
         for i, story in enumerate(self.stories['entries']):
             split = re.search(r'-[^-]*$', story['title']).start()
             self.top_stories[i] = story['title'][:split - 1].lower()
+            print(self.top_stories[i])
         return self.top_stories
 
     def tokenize_stories(self, stories):
         self.tokenized_top_stories = {}
         tokenizer = RegexpTokenizer(r'\w+|\$[\d\.]+|\S+')
         for i in range (len(self.top_stories)):
-            self.tokenized_top_stories[i] = tokenizer.tokenize(self.top_stories[i])
+            self.tokenized_top_stories[i] = ['<s>'] + tokenizer.tokenize(self.top_stories[i]) + ['<\s>']
         return self.tokenized_top_stories
 
     def generate_ngrams(self, stories, n):
         n_grams = []
         for story in self.tokenized_top_stories.values():
             for i in range(n-1, len(story)): 
-                n_grams.append(tuple(story[i-(n-1):i+1]))  
+                n_grams.append(tuple(story[i-(n-1):i+1]))    
         print(n_grams)
         return n_grams
 
@@ -48,8 +51,6 @@ class Autopoiem():
         bins = len(cfd) # we have to pass the number of bins in our freq dist in as a parameter to probability distribution, so we have a bin for every word
         cpd = ConditionalProbDist(cfd, ELEProbDist, bins)
         self.cpd = cpd
-        print(self.cpd)
-        return cpd
 
     def get_autopoiem(self, num_lines, seed = []):
         autopoiem = []
@@ -72,10 +73,16 @@ class Autopoiem():
                 next_token = self.cpd[lessgram].generate()
                 autopoiem.append(next_token)
 
-        autopoiem = '\n'.join(string)
+        autopoiem = ' '.join(autopoiem)
+        autopoiem = add_stops(autopoiem)
 
         return autopoiem
+
+    def add_stops(string):
+        string = re.sub(r"</s>(?:\s</s>)*\s<s>(?:\s<s>)*", "\n", string)
+        string = re.sub(r"(<s>\s)+", "", string) # initial tokens
+        string = re.sub(r"(</s>)", "", string) # final token
         
-        
+        return string
 
 a1 = Autopoiem(2)
